@@ -12,9 +12,9 @@ const loginSection = document.getElementById('login-section');
 const resultsSection = document.getElementById('results-section');
 const expansionList = document.getElementById('expansion-list');
 
-// Create a Debug Log area dynamically
+// --- DEBUG LOG ---
 const debugDiv = document.createElement('div');
-debugDiv.style.background = '#333';
+debugDiv.style.background = '#222';
 debugDiv.style.color = '#0f0';
 debugDiv.style.padding = '10px';
 debugDiv.style.marginTop = '20px';
@@ -27,7 +27,7 @@ function log(msg) {
     debugDiv.innerHTML += msg + '\n';
 }
 
-// --- PKCE & AUTH ---
+// --- PKCE ---
 function generateRandomString(length) {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
     let result = '';
@@ -49,10 +49,12 @@ async function generateCodeChallenge(codeVerifier) {
         .replace(/=+$/, '');
 }
 
+// --- STEP 1: LOGIN (Dynamic Region) ---
 async function initiateLogin() {
-    const selectedRegion = regionSelect.value;
-    sessionStorage.setItem('selected_region', selectedRegion);
-    log(`Starting Login for Region: ${selectedRegion}`);
+    const region = regionSelect.value; // Get 'us', 'eu', 'kr', or 'tw'
+    sessionStorage.setItem('selected_region', region);
+    
+    log(`Initializing Login for Region: ${region.toUpperCase()}`);
 
     const codeVerifier = generateRandomString(64);
     sessionStorage.setItem('code_verifier', codeVerifier);
@@ -60,7 +62,10 @@ async function initiateLogin() {
     const state = generateRandomString(16);
     sessionStorage.setItem('oauth_state', state);
 
-    const authUrl = new URL('https://eu.battle.net/oauth/authorize');
+    // DYNAMIC URL: Uses the specific region server (eu.battle.net, us.battle.net, etc)
+    // This ensures the login session is created on the correct continent.
+    const authUrl = new URL(`https://${region}.battle.net/oauth/authorize`);
+    
     authUrl.searchParams.append('client_id', CLIENT_ID);
     authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
     authUrl.searchParams.append('response_type', 'code');
@@ -72,37 +77,40 @@ async function initiateLogin() {
     window.location.href = authUrl.toString();
 }
 
+// --- STEP 2: CALLBACK & TOKEN (Dynamic Region) ---
 async function handleCallback() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
 
-    // Restore region
-    const savedRegion = sessionStorage.getItem('selected_region');
-    if (savedRegion) regionSelect.value = savedRegion;
+    // Restore the dropdown visual
+    const savedRegion = sessionStorage.getItem('selected_region') || 'us';
+    regionSelect.value = savedRegion;
 
     if (code && state) {
-        log("Callback received. Processing...");
+        log(`Callback received. exchanging code on ${savedRegion.toUpperCase()} server...`);
         
-        // Don't clear URL yet, so we can see what's happening
         loginSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
 
+        // Security Checks
         const savedState = sessionStorage.getItem('oauth_state');
         if (state !== savedState) {
-            log("ERROR: State mismatch. Possible security issue.");
+            log("SECURITY ERROR: State mismatch.");
             return;
         }
-
         const codeVerifier = sessionStorage.getItem('code_verifier');
         if (!codeVerifier) {
-            log("ERROR: Code verifier missing from storage. Did the tab reload?");
+            log("ERROR: Code verifier missing.");
             return;
         }
 
-        log("Exchanging code for token...");
         try {
-            const tokenResponse = await fetch('https://eu.battle.net/oauth/token', {
+            // DYNAMIC TOKEN URL: We must swap the code on the SAME server we logged in on.
+            // If we logged in on EU, we must swap on EU.
+            const tokenUrl = `https://${savedRegion}.battle.net/oauth/token`;
+
+            const tokenResponse = await fetch(tokenUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -116,12 +124,13 @@ async function handleCallback() {
 
             if (!tokenResponse.ok) {
                 const text = await tokenResponse.text();
-                log(`TOKEN ERROR: ${tokenResponse.status} - ${text}`);
+                log(`TOKEN ERROR: ${tokenResponse.status}`);
+                log(`Details: ${text}`);
                 return;
             }
 
             const tokenData = await tokenResponse.json();
-            log("Token received successfully.");
+            log("Token acquired! Fetching profile...");
             sessionStorage.setItem('access_token', tokenData.access_token);
             
             fetchAchievementData();
@@ -131,12 +140,12 @@ async function handleCallback() {
     } else {
         const accessToken = sessionStorage.getItem('access_token');
         if (accessToken) {
-            log("Found existing token. Loading data...");
+            log("Session found. Loading data...");
             loginSection.classList.add('hidden');
             resultsSection.classList.remove('hidden');
             fetchAchievementData();
         } else {
-            log("Ready to log in.");
+            log("Ready. Select region and log in.");
         }
     }
 }
@@ -144,11 +153,10 @@ async function handleCallback() {
 async function fetchAchievementData() {
     const accessToken = sessionStorage.getItem('access_token');
     const region = sessionStorage.getItem('selected_region') || 'us'; 
+    
+    // API data is also region-specific
     const apiBaseUrl = `https://${region}.api.blizzard.com`;
     const namespace = `profile-${region}`;
-
-    log(`Fetching data from: ${apiBaseUrl}`);
-    log(`Namespace: ${namespace}`);
 
     try {
         const response = await fetch(`${apiBaseUrl}/profile/user/wow/achievements?namespace=${namespace}`, {
@@ -156,43 +164,33 @@ async function fetchAchievementData() {
         });
 
         if (!response.ok) {
-            log(`API ERROR: ${response.status} ${response.statusText}`);
-            if (response.status === 401) log("401 means the Token is invalid or expired.");
-            if (response.status === 404) log("404 means no WoW Account found on this Region.");
-            if (response.status === 403) log("403 means Forbidden (Check scopes).");
+            log(`API DATA ERROR: ${response.status}`);
             return;
         }
 
-        log("Data received! Processing...");
         const data = await response.json();
         processLoremasterDeepDive(data);
     } catch (error) {
-        log(`FETCH EXCEPTION: ${error.message}`);
+        log(`FETCH ERROR: ${error.message}`);
     }
-}
-
-function findAchievement(data, id) {
-    if (!data.achievements) return null;
-    return data.achievements.find(a => a.id === id);
 }
 
 function processLoremasterDeepDive(data) {
-    const loremaster = findAchievement(data, LOREMASTER_ACHIEVEMENT_ID);
-
+    if (!data.achievements) { log("No achievement data found."); return; }
+    
+    const loremaster = data.achievements.find(a => a.id === LOREMASTER_ACHIEVEMENT_ID);
     if (!loremaster) {
-        log("Data loaded, but Loremaster ID 7520 not found in list.");
-        log("This usually means you haven't started it, OR the API returned partial data.");
+        log("Loremaster Achievement not found in list.");
         return;
     }
 
-    log("Loremaster data found. Rendering list...");
+    log("Rendering Loremaster Data...");
     const overallStatus = document.getElementById('overall-status');
     const overallProgressBar = document.getElementById('overall-progress-bar');
     
-    // Calculate percentages
-    const totalCriteria = loremaster.criteria.child_criteria.length;
-    const completedCriteria = loremaster.criteria.child_criteria.filter(c => c.is_completed).length;
-    const percent = Math.round((completedCriteria / totalCriteria) * 100);
+    const total = loremaster.criteria.child_criteria.length;
+    const completed = loremaster.criteria.child_criteria.filter(c => c.is_completed).length;
+    const percent = Math.round((completed / total) * 100);
     
     overallStatus.textContent = `Progress: ${percent}%`;
     overallProgressBar.style.width = `${percent}%`;
@@ -205,7 +203,7 @@ function renderExpansions(expansionCriteria, allData) {
     
     expansionCriteria.forEach(expCrit => {
         const expId = expCrit.achievement.id; 
-        const expData = findAchievement(allData, expId);
+        const expData = allData.achievements.find(a => a.id === expId);
         
         const expLi = document.createElement('li');
         expLi.className = `achievement-item ${expCrit.is_completed ? 'completed' : 'incomplete'}`;
@@ -225,7 +223,7 @@ function renderExpansions(expansionCriteria, allData) {
                 if (zoneCrit.is_completed) return;
                 
                 const zoneId = zoneCrit.achievement ? zoneCrit.achievement.id : 'Unknown';
-                const zoneData = findAchievement(allData, zoneId);
+                const zoneData = allData.achievements.find(a => a.id === zoneId);
                 let detailText = "Incomplete";
 
                 if (zoneData) {
@@ -257,5 +255,3 @@ if(logoutBtn) logoutBtn.addEventListener('click', () => {
 regionSelect.addEventListener('change', () => sessionStorage.setItem('selected_region', regionSelect.value));
 
 handleCallback();
-
-
