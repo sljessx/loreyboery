@@ -1,6 +1,6 @@
 // --- Configuration ---
 // Replace this with your actual Client ID from the Blizzard Developer Portal
-const CLIENT_ID = 'YOUR_BLIZZARD_CLIENT_ID'; 
+const CLIENT_ID = '0e53703a28dc4d9681b7a159b8a4df37'; 
 
 // This dynamically grabs your current URL. 
 // IMPORTANT: Ensure the Redirect URI in the Blizzard Portal exactly matches the URL 
@@ -237,3 +237,4 @@ if(logoutBtn) logoutBtn.addEventListener('click', logout);
 
 // Run on page load
 handleCallback();
+
