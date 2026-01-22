@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loremaster Account Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Loremaster Account Tracker</h1>
+            <p>Track your World of Warcraft account-wide progress towards The Loremaster.</p>
+        </header>
+
+        <main>
+            <div id="login-section">
+                <button id="login-btn">Log in with Battle.net</button>
+            </div>
+
+            <div id="loading-section" class="hidden">
+                <p>Loading your achievement data...</p>
+            </div>
+
+            <div id="results-section" class="hidden">
+                <div class="summary-card">
+                    <h2>The Loremaster</h2>
+                    <p id="overall-status">Status: Checking...</p>
+                    <div class="progress-bar-container">
+                        <div id="overall-progress-bar" class="progress-bar"></div>
+                    </div>
+                </div>
+
+                <h3>Expansion Progress</h3>
+                <ul id="expansion-list" class="achievement-list">
+                    </ul>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by the Blizzard API</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

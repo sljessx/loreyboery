@@ -1,0 +1,116 @@
+:root {
+    --primary-color: #0070ba;
+    --background-color: #1a1a1a;
+    --text-color: #f4f4f4;
+    --card-background: #2a2a2a;
+    --success-color: #4caf50;
+    --border-radius: 8px;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+h1 {
+    color: var(--primary-color);
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #005ea6;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#login-section {
+    text-align: center;
+    margin-top: 50px;
+}
+
+#loading-section {
+    text-align: center;
+    font-style: italic;
+    color: #aaa;
+}
+
+.summary-card {
+    background-color: var(--card-background);
+    padding: 20px;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.progress-bar-container {
+    background-color: #444;
+    border-radius: 10px;
+    height: 20px;
+    width: 100%;
+    margin-top: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background-color: var(--success-color);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease-in-out;
+}
+
+.achievement-list {
+    list-style: none;
+    padding: 0;
+}
+
+.achievement-item {
+    background-color: var(--card-background);
+    padding: 15px;
+    border-radius: var(--border-radius);
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.completed {
+    border-left: 5px solid var(--success-color);
+}
+
+.incomplete {
+    border-left: 5px solid #ff9800;
+}
+
+footer {
+    text-align: center;
+    margin-top: 50px;
+    font-size: 0.8rem;
+    color: #777;
+}
