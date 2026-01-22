@@ -1,7 +1,7 @@
 // --- Configuration ---
 // Replace this with your actual Client ID from the Blizzard Developer Portal
 const CLIENT_ID = '0e53703a28dc4d9681b7a159b8a4df37'; 
-const REDIRECT_URI = window.location.origin + window.location.pathname; 
+const REDIRECT_URI = 'https://sljessx.github.io/loreyboery/';
 const BLIZZARD_AUTH_URL = 'https://oauth.battle.net/authorize';
 const BLIZZARD_TOKEN_URL = 'https://oauth.battle.net/token';
 const API_BASE_URL = 'https://us.api.blizzard.com'; // Change to 'eu.api.blizzard.com' if your account is in EU
@@ -227,3 +227,4 @@ loginBtn.addEventListener('click', initiateLogin);
 // Run on page load
 
 handleCallback();
+
