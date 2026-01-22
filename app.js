@@ -1,5 +1,5 @@
 // --- Configuration ---
-const CLIENT_ID = '0e53703a28dc4d9681b7a159b8a4df37';
+const CLIENT_ID = '2d44be25ffc847c4ba98bbeb9d352535';
 const REDIRECT_URI = 'https://sljessx.github.io/loreyboery/'; 
 
 const LOREMASTER_ACHIEVEMENT_ID = 7520; 
@@ -257,3 +257,4 @@ if(logoutBtn) logoutBtn.addEventListener('click', () => {
 regionSelect.addEventListener('change', () => sessionStorage.setItem('selected_region', regionSelect.value));
 
 handleCallback();
+
