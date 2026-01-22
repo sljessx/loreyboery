@@ -162,7 +162,6 @@ async function findMainCharacter() {
         allChars.sort((a, b) => b.level - a.level);
         const mainChar = allChars[0];
 
-        // FIX: Handle Realm Name being an object or string
         const realmName = (typeof mainChar.realm.name === 'string') 
             ? mainChar.realm.name 
             : (mainChar.realm.name.en_US || mainChar.realm.name.en_GB || "Unknown Realm");
@@ -187,7 +186,15 @@ async function findMainCharacter() {
         }
 
         const achievData = await achievResponse.json();
-        processLoremasterDeepDive(achievData, achievData.achievements);
+        
+        // OPTIMIZATION: Convert Array to Map for instant lookup
+        log("Optimizing data structure...");
+        const achievementMap = new Map();
+        achievData.achievements.forEach(ach => {
+            achievementMap.set(ach.id, ach);
+        });
+
+        processLoremasterDeepDive(achievData, achievementMap);
 
     } catch (error) {
         log(`LOGIC ERROR: ${error.message}`);
@@ -195,8 +202,8 @@ async function findMainCharacter() {
     }
 }
 
-function processLoremasterDeepDive(data, allAchievements) {
-    const loremaster = allAchievements.find(a => a.id === LOREMASTER_ACHIEVEMENT_ID);
+function processLoremasterDeepDive(data, achievementMap) {
+    const loremaster = achievementMap.get(LOREMASTER_ACHIEVEMENT_ID);
 
     log("Rendering Loremaster Data...");
     const overallStatus = document.getElementById('overall-status');
@@ -225,22 +232,19 @@ function processLoremasterDeepDive(data, allAchievements) {
     overallStatus.textContent = `Progress: ${percent}%`;
     overallProgressBar.style.width = `${percent}%`;
 
-    renderExpansions(loremaster.criteria.child_criteria, allAchievements);
+    renderExpansions(loremaster.criteria.child_criteria, achievementMap);
 }
 
-function renderExpansions(expansionCriteria, allAchievements) {
+function renderExpansions(expansionCriteria, achievementMap) {
     expansionList.innerHTML = '';
     
     expansionCriteria.forEach(expCrit => {
-        // --- FIX: SAFETY CHECK FOR CRASH ---
-        if (!expCrit.achievement) {
-            // Some criteria are just "requirements" without a linked Achievement ID
-            // We skip them to prevent the crash
-            return; 
-        }
+        // Safety Check
+        if (!expCrit.achievement) return; 
 
         const expId = expCrit.achievement.id; 
-        const expData = allAchievements.find(a => a.id === expId);
+        // INSTANT LOOKUP via Map
+        const expData = achievementMap.get(expId);
         
         const expLi = document.createElement('li');
         expLi.className = `achievement-item ${expCrit.is_completed ? 'completed' : 'incomplete'}`;
@@ -269,7 +273,8 @@ function renderExpansions(expansionCriteria, allAchievements) {
                 let detailText = "Incomplete";
 
                 if (zoneId) {
-                    const zoneData = allAchievements.find(a => a.id === zoneId);
+                    // INSTANT LOOKUP via Map
+                    const zoneData = achievementMap.get(zoneId);
                     if (zoneData) {
                         if (zoneData.criteria && zoneData.criteria.amount !== undefined) {
                             detailText = `${zoneData.criteria.amount} / ${zoneData.criteria.max} Quests`;
