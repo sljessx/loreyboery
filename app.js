@@ -4,8 +4,8 @@ const CLIENT_ID = '0e53703a28dc4d9681b7a159b8a4df37';
 const REDIRECT_URI = 'https://sljessx.github.io/loreyboery/';
 const BLIZZARD_AUTH_URL = 'https://oauth.battle.net/authorize';
 const BLIZZARD_TOKEN_URL = 'https://oauth.battle.net/token';
-const API_BASE_URL = 'https://us.api.blizzard.com'; // Change to 'eu.api.blizzard.com' if your account is in EU
-const NAMESPACE = 'profile-us'; // Change to 'profile-eu' if your account is in EU
+const API_BASE_URL = 'https://eu.api.blizzard.com'; // Change to 'eu.api.blizzard.com' if your account is in EU
+const NAMESPACE = 'profile-eu'; // Change to 'profile-eu' if your account is in EU
 
 // Achievement ID for "The Loremaster"
 const LOREMASTER_ACHIEVEMENT_ID = 7520; 
@@ -227,4 +227,5 @@ loginBtn.addEventListener('click', initiateLogin);
 // Run on page load
 
 handleCallback();
+
 
