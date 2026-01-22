@@ -60,7 +60,7 @@ async function initiateLogin() {
     const state = generateRandomString(16);
     sessionStorage.setItem('oauth_state', state);
 
-    const authUrl = new URL('https://oauth.battle.net/authorize');
+    const authUrl = new URL('https://eu.battle.net/oauth/authorize');
     authUrl.searchParams.append('client_id', CLIENT_ID);
     authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
     authUrl.searchParams.append('response_type', 'code');
@@ -102,7 +102,7 @@ async function handleCallback() {
 
         log("Exchanging code for token...");
         try {
-            const tokenResponse = await fetch('https://oauth.battle.net/token', {
+            const tokenResponse = await fetch('https://eu.battle.net/oauth/token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({
@@ -257,4 +257,5 @@ if(logoutBtn) logoutBtn.addEventListener('click', () => {
 regionSelect.addEventListener('change', () => sessionStorage.setItem('selected_region', regionSelect.value));
 
 handleCallback();
+
 
