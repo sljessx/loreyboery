@@ -49,9 +49,9 @@ async function generateCodeChallenge(codeVerifier) {
         .replace(/=+$/, '');
 }
 
-// --- STEP 1: LOGIN (Dynamic Region) ---
+// --- STEP 1: LOGIN (Global Server) ---
 async function initiateLogin() {
-    const region = regionSelect.value; // Get 'us', 'eu', 'kr', or 'tw'
+    const region = regionSelect.value; 
     sessionStorage.setItem('selected_region', region);
     
     log(`Initializing Login for Region: ${region.toUpperCase()}`);
@@ -62,9 +62,9 @@ async function initiateLogin() {
     const state = generateRandomString(16);
     sessionStorage.setItem('oauth_state', state);
 
-    // DYNAMIC URL: Uses the specific region server (eu.battle.net, us.battle.net, etc)
-    // This ensures the login session is created on the correct continent.
-    const authUrl = new URL(`https://${region}.battle.net/oauth/authorize`);
+    // FIX: Always use the GLOBAL oauth.battle.net server for login
+    // The Region selection is saved for Step 3 (Data Fetch)
+    const authUrl = new URL('https://oauth.battle.net/authorize');
     
     authUrl.searchParams.append('client_id', CLIENT_ID);
     authUrl.searchParams.append('redirect_uri', REDIRECT_URI);
@@ -74,10 +74,13 @@ async function initiateLogin() {
     authUrl.searchParams.append('code_challenge', codeChallenge);
     authUrl.searchParams.append('code_challenge_method', 'S256');
 
+    // Optional: Hint the region to Blizzard
+    if (region === 'eu') authUrl.searchParams.append('region', 'eu');
+
     window.location.href = authUrl.toString();
 }
 
-// --- STEP 2: CALLBACK & TOKEN (Dynamic Region) ---
+// --- STEP 2: CALLBACK & TOKEN (Global Server) ---
 async function handleCallback() {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -88,7 +91,7 @@ async function handleCallback() {
     regionSelect.value = savedRegion;
 
     if (code && state) {
-        log(`Callback received. exchanging code on ${savedRegion.toUpperCase()} server...`);
+        log(`Callback received. Swapping code on Global Server...`);
         
         loginSection.classList.add('hidden');
         resultsSection.classList.remove('hidden');
@@ -106,9 +109,8 @@ async function handleCallback() {
         }
 
         try {
-            // DYNAMIC TOKEN URL: We must swap the code on the SAME server we logged in on.
-            // If we logged in on EU, we must swap on EU.
-            const tokenUrl = `https://${savedRegion}.battle.net/oauth/token`;
+            // FIX: Always use GLOBAL token endpoint
+            const tokenUrl = 'https://oauth.battle.net/token';
 
             const tokenResponse = await fetch(tokenUrl, {
                 method: 'POST',
@@ -130,7 +132,7 @@ async function handleCallback() {
             }
 
             const tokenData = await tokenResponse.json();
-            log("Token acquired! Fetching profile...");
+            log("Token acquired! Fetching profile data...");
             sessionStorage.setItem('access_token', tokenData.access_token);
             
             fetchAchievementData();
@@ -150,13 +152,16 @@ async function handleCallback() {
     }
 }
 
+// --- STEP 3: DATA FETCH (Regional Server) ---
 async function fetchAchievementData() {
     const accessToken = sessionStorage.getItem('access_token');
     const region = sessionStorage.getItem('selected_region') || 'us'; 
     
-    // API data is also region-specific
+    // FIX: This is where the Region matters!
     const apiBaseUrl = `https://${region}.api.blizzard.com`;
     const namespace = `profile-${region}`;
+
+    log(`Querying API: ${apiBaseUrl}`);
 
     try {
         const response = await fetch(`${apiBaseUrl}/profile/user/wow/achievements?namespace=${namespace}`, {
@@ -165,6 +170,8 @@ async function fetchAchievementData() {
 
         if (!response.ok) {
             log(`API DATA ERROR: ${response.status}`);
+            if (response.status === 401) log("401 means the Token is valid, but not for this region's API.");
+            if (response.status === 404) log("404 means no WoW Account found on this Region.");
             return;
         }
 
@@ -180,7 +187,8 @@ function processLoremasterDeepDive(data) {
     
     const loremaster = data.achievements.find(a => a.id === LOREMASTER_ACHIEVEMENT_ID);
     if (!loremaster) {
-        log("Loremaster Achievement not found in list.");
+        log("Loremaster Achievement (ID 7520) not found in your list.");
+        log("This means you haven't completed it, but also haven't started tracking it?");
         return;
     }
 
