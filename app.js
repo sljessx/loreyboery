@@ -104,10 +104,11 @@ async function handleCallback() {
             }
 
             const tokenData = await tokenResponse.json();
-            log("Token acquired! Fetching profile data...");
+            log("Token acquired! Finding your main character...");
             sessionStorage.setItem('access_token', tokenData.access_token);
             
-            fetchAchievementData();
+            // Go straight to the "Find Main Character" logic
+            findMainCharacter();
         } catch (error) {
             log(`CRITICAL ERROR: ${error.message}`);
         }
@@ -117,131 +118,97 @@ async function handleCallback() {
             log("Session found. Loading data...");
             loginSection.classList.add('hidden');
             resultsSection.classList.remove('hidden');
-            fetchAchievementData();
+            findMainCharacter();
         } else {
             log("Ready. Select region and log in.");
         }
     }
 }
 
-// --- STEP 3: DATA FETCH (With Fallback) ---
-async function fetchAchievementData() {
+// --- STEP 3: FIND CHARACTER & FETCH ACHIEVEMENTS ---
+async function findMainCharacter() {
     const accessToken = sessionStorage.getItem('access_token');
     const region = sessionStorage.getItem('selected_region') || 'us'; 
     const apiBaseUrl = `https://${region}.api.blizzard.com`;
     const namespace = `profile-${region}`;
 
-    log(`Attempting Plan A: Account Profile...`);
-
     try {
-        // PLAN A: Direct Account Fetch
-        let response = await fetch(`${apiBaseUrl}/profile/user/wow/achievements?namespace=${namespace}`, {
-            headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-
-        if (response.ok) {
-            log("Plan A Success: Account data found.");
-            const data = await response.json();
-            processLoremasterDeepDive(data, apiBaseUrl, namespace, accessToken);
-            return;
-        }
-
-        if (response.status === 404) {
-            log("Plan A Failed (404). Account Profile not found.");
-            log("Attempting Plan B: Fetching Character List...");
-            
-            // PLAN B: Fetch Account Summary -> Get Main Character -> Get Their Achievements
-            await fetchCharacterFallback(apiBaseUrl, namespace, accessToken);
-            return;
-        }
-
-        // Handle other errors
-        log(`API ERROR: ${response.status}`);
-
-    } catch (error) {
-        log(`FETCH ERROR: ${error.message}`);
-    }
-}
-
-async function fetchCharacterFallback(apiBaseUrl, namespace, accessToken) {
-    try {
-        // 1. Get List of Characters
+        // 1. Get the Account Summary (List of Characters)
         const accountResponse = await fetch(`${apiBaseUrl}/profile/user/wow?namespace=${namespace}`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
         if (!accountResponse.ok) {
-            log(`Plan B Failed: Could not load character list (Error ${accountResponse.status}).`);
-            log("Do you have any characters on this Region?");
+            log(`ACCOUNT ERROR: ${accountResponse.status}`);
+            log("Could not load account summary.");
             return;
         }
 
         const accountData = await accountResponse.json();
         
         if (!accountData.wow_accounts || accountData.wow_accounts.length === 0) {
-            log("Plan B Failed: No WoW accounts found.");
+            log("Error: No WoW accounts found.");
             return;
         }
 
-        // Flatten the list of all characters across all licenses
+        // 2. Flatten the list to find all characters
         let allChars = [];
         accountData.wow_accounts.forEach(acc => {
             if (acc.characters) allChars = allChars.concat(acc.characters);
         });
 
         if (allChars.length === 0) {
-            log("Plan B Failed: No characters found.");
+            log("Error: No characters found on this account.");
             return;
         }
 
-        // 2. Pick the 'Best' Character (highest level)
-        // Sort by level descending
+        // 3. Sort by Level (High to Low) to find "Main"
         allChars.sort((a, b) => b.level - a.level);
         const mainChar = allChars[0];
 
-        log(`Plan B: Using Main Character: ${mainChar.name} (Level ${mainChar.level})`);
+        log(`Found Main Character: ${mainChar.name} (Level ${mainChar.level})`);
+        log(`Realm: ${mainChar.realm.name}`);
+
+        // 4. Construct the URL manually (The "href" fix)
+        // We use lowercase name and slugified realm as per API docs
+        const charName = mainChar.name.toLowerCase();
+        const realmSlug = mainChar.realm.slug;
         
-        // 3. Fetch Achievements for this Character
-        // Character HREF usually looks like: .../character/realm-slug/char-name
-        // We construct the Achievement URL from the character's HREF
-        const charAchievUrl = `${mainChar.key.href}/achievements?namespace=${namespace}`;
+        const achievUrl = `${apiBaseUrl}/profile/wow/character/${realmSlug}/${charName}/achievements?namespace=${namespace}`;
+
+        log(`Fetching Achievements...`);
         
-        const charResponse = await fetch(charAchievUrl, {
+        const achievResponse = await fetch(achievUrl, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        if (!charResponse.ok) {
-            log(`Plan B Failed: Could not load character achievements (Error ${charResponse.status}).`);
+        if (!achievResponse.ok) {
+            log(`ACHIEVEMENT ERROR: ${achievResponse.status}`);
             return;
         }
 
-        const charData = await charResponse.json();
-        log("Plan B Success: Character data loaded.");
-        
-        // Process this data (Structure is nearly identical)
-        processLoremasterDeepDive(charData, apiBaseUrl, namespace, accessToken);
+        const achievData = await achievResponse.json();
+        processLoremasterDeepDive(achievData, achievData.achievements);
 
     } catch (error) {
-        log(`FALLBACK ERROR: ${error.message}`);
+        log(`LOGIC ERROR: ${error.message}`);
     }
 }
 
-function processLoremasterDeepDive(data, apiBaseUrl, namespace, accessToken) {
-    if (!data.achievements) { log("No achievement data found."); return; }
-    
-    const loremaster = data.achievements.find(a => a.id === LOREMASTER_ACHIEVEMENT_ID);
-    if (!loremaster) {
-        log("Loremaster Achievement (ID 7520) not found in list.");
-        return;
-    }
+function processLoremasterDeepDive(data, allAchievements) {
+    const loremaster = allAchievements.find(a => a.id === LOREMASTER_ACHIEVEMENT_ID);
 
     log("Rendering Loremaster Data...");
     const overallStatus = document.getElementById('overall-status');
     const overallProgressBar = document.getElementById('overall-progress-bar');
+
+    if (!loremaster) {
+        log("Loremaster data not found on this character.");
+        return;
+    }
     
     // Safety check for criteria
     if (!loremaster.criteria || !loremaster.criteria.child_criteria) {
-        // If completed, criteria might be empty in some API responses?
         if (loremaster.is_completed) {
             overallStatus.textContent = "Status: Completed!";
             overallProgressBar.style.width = '100%';
@@ -259,8 +226,7 @@ function processLoremasterDeepDive(data, apiBaseUrl, namespace, accessToken) {
     overallStatus.textContent = `Progress: ${percent}%`;
     overallProgressBar.style.width = `${percent}%`;
 
-    // Pass the full dataset (allData) to the render function
-    renderExpansions(loremaster.criteria.child_criteria, data.achievements);
+    renderExpansions(loremaster.criteria.child_criteria, allAchievements);
 }
 
 function renderExpansions(expansionCriteria, allAchievements) {
@@ -275,6 +241,7 @@ function renderExpansions(expansionCriteria, allAchievements) {
         expLi.style.flexDirection = 'column';
         expLi.style.alignItems = 'flex-start';
 
+        // NOTE: We display ID because names require a separate Static Data call.
         expLi.innerHTML = `<strong>Achievement ${expId}</strong>: ${expCrit.is_completed ? 'Done' : 'In Progress'}`;
 
         if (!expCrit.is_completed && expData && expData.criteria) {
@@ -282,30 +249,41 @@ function renderExpansions(expansionCriteria, allAchievements) {
             zoneList.style.fontSize = '0.9em';
             zoneList.style.marginTop = '5px';
             
-            const zoneCriteria = expData.criteria.child_criteria || [expData.criteria];
+            // Handle different criteria structures
+            let zoneCriteria = [];
+            if (expData.criteria.child_criteria) {
+                zoneCriteria = expData.criteria.child_criteria;
+            } else {
+                zoneCriteria = [expData.criteria];
+            }
 
             zoneCriteria.forEach(zoneCrit => {
                 if (zoneCrit.is_completed) return;
                 
+                // Try to find a meaningful name or ID
                 const zoneId = zoneCrit.achievement ? zoneCrit.achievement.id : null;
-                if(!zoneId) return;
+                const description = zoneCrit.description || "Unknown Task";
 
-                const zoneData = allAchievements.find(a => a.id === zoneId);
                 let detailText = "Incomplete";
 
-                if (zoneData) {
-                    if (zoneData.criteria && zoneData.criteria.amount !== undefined) {
-                        detailText = `${zoneData.criteria.amount} / ${zoneData.criteria.max} Quests`;
-                    } else if (zoneData.criteria && zoneData.criteria.child_criteria) {
-                         const missing = zoneData.criteria.child_criteria
-                            .filter(c => !c.is_completed)
-                            .map(c => c.description).join(', ');
-                         detailText = missing || "Chapters missing";
+                if (zoneId) {
+                    const zoneData = allAchievements.find(a => a.id === zoneId);
+                    if (zoneData) {
+                        if (zoneData.criteria && zoneData.criteria.amount !== undefined) {
+                            detailText = `${zoneData.criteria.amount} / ${zoneData.criteria.max} Quests`;
+                        } else if (zoneData.criteria && zoneData.criteria.child_criteria) {
+                             const missing = zoneData.criteria.child_criteria
+                                .filter(c => !c.is_completed)
+                                .map(c => c.description).join(', ');
+                             detailText = missing || "Chapters missing";
+                        }
                     }
+                } else {
+                     detailText = description; 
                 }
                 
                 const zLi = document.createElement('li');
-                zLi.innerHTML = `Zone ${zoneId}: ${detailText}`;
+                zLi.innerHTML = zoneId ? `Zone ${zoneId}: ${detailText}` : `Task: ${detailText}`;
                 zoneList.appendChild(zLi);
             });
             expLi.appendChild(zoneList);
