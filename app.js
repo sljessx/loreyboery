@@ -63,7 +63,6 @@ async function initiateLogin() {
     sessionStorage.setItem('oauth_state', state);
 
     // FIX: Always use the GLOBAL oauth.battle.net server for login
-    // The Region selection is saved for Step 3 (Data Fetch)
     const authUrl = new URL('https://oauth.battle.net/authorize');
     
     authUrl.searchParams.append('client_id', CLIENT_ID);
@@ -73,9 +72,6 @@ async function initiateLogin() {
     authUrl.searchParams.append('state', state);
     authUrl.searchParams.append('code_challenge', codeChallenge);
     authUrl.searchParams.append('code_challenge_method', 'S256');
-
-    // Optional: Hint the region to Blizzard
-    if (region === 'eu') authUrl.searchParams.append('region', 'eu');
 
     window.location.href = authUrl.toString();
 }
@@ -112,11 +108,17 @@ async function handleCallback() {
             // FIX: Always use GLOBAL token endpoint
             const tokenUrl = 'https://oauth.battle.net/token';
 
+            // AUTH HEADER FIX: Encode "Client_ID:" (with a colon) into Base64
+            // This tells Blizzard "Here is my ID, I have no password" in the header.
+            const basicAuth = btoa(`${CLIENT_ID}:`);
+
             const tokenResponse = await fetch(tokenUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: { 
+                    'Authorization': `Basic ${basicAuth}`,
+                    'Content-Type': 'application/x-www-form-urlencoded' 
+                },
                 body: new URLSearchParams({
-                    client_id: CLIENT_ID,
                     redirect_uri: REDIRECT_URI,
                     grant_type: 'authorization_code',
                     code: code,
