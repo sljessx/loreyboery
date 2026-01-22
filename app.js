@@ -1,7 +1,10 @@
 // --- Configuration ---
 const CLIENT_ID = '0e53703a28dc4d9681b7a159b8a4df37'; // <--- PUT YOUR CLIENT ID HERE
 // Dynamic Redirect URI (Must match Blizzard Developer Portal exactly)
-const REDIRECT_URI = window.location.origin + window.location.pathname; 
+// IMPORTANT: PASTE YOUR EXACT GITHUB PAGES URL HERE.
+// It must match the Blizzard Developer Portal EXACTLY.
+// Example: 'https://yourname.github.io/your-repo/'
+const REDIRECT_URI = 'https://sljessx.github.io/loreyboery/'; 
 
 const LOREMASTER_ACHIEVEMENT_ID = 7520; 
 
@@ -16,13 +19,21 @@ const overallStatus = document.getElementById('overall-status');
 const overallProgressBar = document.getElementById('overall-progress-bar');
 const expansionList = document.getElementById('expansion-list');
 
-// --- Helper: Find an achievement by ID in the user's data ---
-// The API returns a flat array of all achievements. We need to search it often.
+// --- Helper: Restore Region Selection ---
+// This ensures that if you pick EU, it stays EU even if the page reloads.
+function restoreRegion() {
+    const savedRegion = sessionStorage.getItem('selected_region');
+    if (savedRegion) {
+        regionSelect.value = savedRegion;
+    }
+}
+
+// --- Helper: Find an achievement by ID ---
 function findAchievement(data, id) {
     return data.achievements.find(a => a.id === id);
 }
 
-// --- PKCE & Auth (Standard OAuth2 Flow) ---
+// --- PKCE & Auth Flow ---
 function generateRandomString(length) {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
     let result = '';
@@ -47,8 +58,10 @@ async function generateCodeChallenge(codeVerifier) {
 async function initiateLogin() {
     const selectedRegion = regionSelect.value;
     sessionStorage.setItem('selected_region', selectedRegion);
+    
     const codeVerifier = generateRandomString(64);
     sessionStorage.setItem('code_verifier', codeVerifier);
+    
     const codeChallenge = await generateCodeChallenge(codeVerifier);
     const state = generateRandomString(16);
     sessionStorage.setItem('oauth_state', state);
@@ -70,15 +83,21 @@ async function handleCallback() {
     const code = urlParams.get('code');
     const state = urlParams.get('state');
 
+    // Restore region immediately so the dropdown doesn't look wrong
+    restoreRegion();
+
     if (code && state) {
         window.history.replaceState({}, document.title, window.location.pathname);
+
         const savedState = sessionStorage.getItem('oauth_state');
         if (state !== savedState) {
-            alert('Security error: State mismatch.');
+            displayError('Security Error: State mismatch. Please try again.');
             return;
         }
+
         const codeVerifier = sessionStorage.getItem('code_verifier');
         showLoading();
+
         try {
             const tokenResponse = await fetch('https://oauth.battle.net/token', {
                 method: 'POST',
@@ -91,18 +110,23 @@ async function handleCallback() {
                     code_verifier: codeVerifier
                 })
             });
-            if (!tokenResponse.ok) throw new Error('Token exchange failed.');
+
+            if (!tokenResponse.ok) {
+                const errorDetails = await tokenResponse.text();
+                throw new Error(`Token Exchange Failed. Status: ${tokenResponse.status}. Details: ${errorDetails}`);
+            }
+
             const tokenData = await tokenResponse.json();
             sessionStorage.setItem('access_token', tokenData.access_token);
             fetchAchievementData();
         } catch (error) {
             console.error('Error:', error);
-            showLogin();
+            // STOP THE FLICKER: Display the error on screen instead of reloading
+            displayError(`Login Failed: ${error.message}`);
         }
     } else {
         const accessToken = sessionStorage.getItem('access_token');
-        const savedRegion = sessionStorage.getItem('selected_region');
-        if (accessToken && savedRegion) {
+        if (accessToken) {
             showLoading();
             fetchAchievementData();
         } else {
@@ -129,6 +153,9 @@ async function fetchAchievementData() {
                 showLogin();
                 return;
             }
+            if (response.status === 404) {
+                 throw new Error('Character/Account data not found. Are you on the right Region?');
+            }
             throw new Error(`API Error: ${response.status}`);
         }
 
@@ -136,23 +163,19 @@ async function fetchAchievementData() {
         processLoremasterDeepDive(data);
     } catch (error) {
         console.error('Fetch error:', error);
-        overallStatus.textContent = 'Error loading data. Try logging out and switching regions.';
-        showResults();
+        displayError(`Data Load Failed: ${error.message}`);
     }
 }
 
-// --- Data Processing (The Logic Update) ---
+// --- Data Processing ---
 function processLoremasterDeepDive(data) {
-    // 1. Get the Main Loremaster Achievement
     const loremaster = findAchievement(data, LOREMASTER_ACHIEVEMENT_ID);
 
     if (!loremaster) {
-        overallStatus.textContent = "Data not found. You may not have started Loremaster yet.";
-        showResults();
+        displayError("Loremaster achievement data not found in your account.");
         return;
     }
 
-    // 2. Display Overall Progress
     if (loremaster.is_completed) {
         overallStatus.textContent = "Congratulations! You are The Loremaster!";
         overallProgressBar.style.width = '100%';
@@ -168,7 +191,6 @@ function processLoremasterDeepDive(data) {
     overallStatus.textContent = `Overall Progress: ${percent}%`;
     overallProgressBar.style.width = `${percent}%`;
 
-    // 3. Drill down into Expansions and Zones
     renderExpansions(loremaster.criteria.child_criteria, data);
     showResults();
 }
@@ -177,25 +199,21 @@ function renderExpansions(expansionCriteria, allData) {
     expansionList.innerHTML = '';
 
     expansionCriteria.forEach(expCrit => {
-        // Find the expansion achievement details in the main dataset
-        // Note: The criteria usually contains an 'id', which is the Achievement ID for that expansion
         const expId = expCrit.achievement.id; 
         const expData = findAchievement(allData, expId);
         
         const expLi = document.createElement('li');
         expLi.className = `achievement-item ${expCrit.is_completed ? 'completed' : 'incomplete'}`;
-        expLi.style.flexDirection = 'column'; // Allow stacking for detail list
+        expLi.style.flexDirection = 'column'; 
         expLi.style.alignItems = 'flex-start';
 
-        // Header for the Expansion
         const header = document.createElement('div');
         header.style.width = '100%';
         header.style.display = 'flex';
         header.style.justifyContent = 'space-between';
-        header.innerHTML = `<strong>Achievement ID: ${expId} (Expansion)</strong> <span>${expCrit.is_completed ? '✓ Done' : 'In Progress'}</span>`;
+        header.innerHTML = `<strong>Achievement ID: ${expId}</strong> <span>${expCrit.is_completed ? '✓ Done' : 'In Progress'}</span>`;
         expLi.appendChild(header);
 
-        // If the expansion is incomplete, list the Zones underneath
         if (!expCrit.is_completed && expData && expData.criteria) {
             const zoneList = document.createElement('ul');
             zoneList.style.width = '100%';
@@ -204,34 +222,27 @@ function renderExpansions(expansionCriteria, allData) {
             zoneList.style.fontSize = '0.9em';
             zoneList.style.color = '#ccc';
 
-            // Loop through Zones in this expansion
-            // Some expansions have direct criteria, some have nested child_criteria
             const zoneCriteria = expData.criteria.child_criteria || [expData.criteria];
 
             zoneCriteria.forEach(zoneCrit => {
-                if (zoneCrit.is_completed) return; // Skip completed zones
+                if (zoneCrit.is_completed) return; 
 
                 const zoneId = zoneCrit.achievement ? zoneCrit.achievement.id : null;
-                
-                // If there is no ID, it might be a direct counter (very old data), skip
                 if (!zoneId) return;
 
                 const zoneData = findAchievement(allData, zoneId);
                 let details = "Not started";
 
-                // DRILL DOWN: Check Zone Details (Counter vs Storyline)
                 if (zoneData) {
-                    // Check if it's a Progress Bar (Counter)
                     if (zoneData.criteria && zoneData.criteria.amount !== undefined) {
                          const current = zoneData.criteria.amount;
                          const max = zoneData.criteria.max;
                          details = `Progress: ${current} / ${max} Quests`;
                     } 
-                    // Check if it has Child Criteria (Storylines/Chapters)
                     else if (zoneData.criteria && zoneData.criteria.child_criteria) {
                         const missingChapters = zoneData.criteria.child_criteria
                             .filter(c => !c.is_completed)
-                            .map(c => c.description || "Unknown Chapter"); // Description usually holds the Chapter Name
+                            .map(c => c.description || "Unknown Chapter"); 
                         
                         if (missingChapters.length > 0) {
                             details = `Missing Chapters: ${missingChapters.join(', ')}`;
@@ -253,6 +264,24 @@ function renderExpansions(expansionCriteria, allData) {
 }
 
 // --- UI Handlers ---
+function displayError(msg) {
+    loginSection.classList.remove('hidden');
+    loadingSection.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    
+    // Inject error message above login button
+    let errorDiv = document.getElementById('error-display');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.id = 'error-display';
+        errorDiv.style.color = 'red';
+        errorDiv.style.marginBottom = '10px';
+        errorDiv.style.fontWeight = 'bold';
+        loginSection.insertBefore(errorDiv, loginBtn.parentNode);
+    }
+    errorDiv.textContent = msg;
+}
+
 function showLogin() {
     loginSection.classList.remove('hidden');
     loadingSection.classList.add('hidden');
@@ -276,6 +305,10 @@ function logout() {
 // --- Event Listeners ---
 loginBtn.addEventListener('click', initiateLogin);
 if(logoutBtn) logoutBtn.addEventListener('click', logout);
+regionSelect.addEventListener('change', () => {
+    // Save region instantly when changed, just in case
+    sessionStorage.setItem('selected_region', regionSelect.value);
+});
 
 // Run on page load
 handleCallback();
