@@ -15,6 +15,15 @@
 
         <main>
             <div id="login-section">
+                <div style="margin-bottom: 15px;">
+                    <label for="region-select" style="margin-right: 10px;">Select Region:</label>
+                    <select id="region-select" style="padding: 8px; border-radius: 4px;">
+                        <option value="us">North America (US)</option>
+                        <option value="eu">Europe (EU)</option>
+                        <option value="kr">Korea (KR)</option>
+                        <option value="tw">Taiwan (TW)</option>
+                    </select>
+                </div>
                 <button id="login-btn">Log in with Battle.net</button>
             </div>
 
@@ -34,6 +43,8 @@
                 <h3>Expansion Progress</h3>
                 <ul id="expansion-list" class="achievement-list">
                     </ul>
+                
+                <button id="logout-btn" style="margin-top: 20px; background-color: #555;">Log Out / Switch Region</button>
             </div>
         </main>
 
