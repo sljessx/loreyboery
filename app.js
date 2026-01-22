@@ -107,7 +107,6 @@ async function handleCallback() {
             log("Token acquired! Finding your main character...");
             sessionStorage.setItem('access_token', tokenData.access_token);
             
-            // Go straight to the "Find Main Character" logic
             findMainCharacter();
         } catch (error) {
             log(`CRITICAL ERROR: ${error.message}`);
@@ -133,7 +132,6 @@ async function findMainCharacter() {
     const namespace = `profile-${region}`;
 
     try {
-        // 1. Get the Account Summary (List of Characters)
         const accountResponse = await fetch(`${apiBaseUrl}/profile/user/wow?namespace=${namespace}`, {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
@@ -151,7 +149,6 @@ async function findMainCharacter() {
             return;
         }
 
-        // 2. Flatten the list to find all characters
         let allChars = [];
         accountData.wow_accounts.forEach(acc => {
             if (acc.characters) allChars = allChars.concat(acc.characters);
@@ -162,15 +159,17 @@ async function findMainCharacter() {
             return;
         }
 
-        // 3. Sort by Level (High to Low) to find "Main"
         allChars.sort((a, b) => b.level - a.level);
         const mainChar = allChars[0];
 
-        log(`Found Main Character: ${mainChar.name} (Level ${mainChar.level})`);
-        log(`Realm: ${mainChar.realm.name}`);
+        // FIX: Handle Realm Name being an object or string
+        const realmName = (typeof mainChar.realm.name === 'string') 
+            ? mainChar.realm.name 
+            : (mainChar.realm.name.en_US || mainChar.realm.name.en_GB || "Unknown Realm");
 
-        // 4. Construct the URL manually (The "href" fix)
-        // We use lowercase name and slugified realm as per API docs
+        log(`Found Main Character: ${mainChar.name} (Level ${mainChar.level})`);
+        log(`Realm: ${realmName}`);
+
         const charName = mainChar.name.toLowerCase();
         const realmSlug = mainChar.realm.slug;
         
@@ -192,6 +191,7 @@ async function findMainCharacter() {
 
     } catch (error) {
         log(`LOGIC ERROR: ${error.message}`);
+        console.error(error);
     }
 }
 
@@ -207,7 +207,6 @@ function processLoremasterDeepDive(data, allAchievements) {
         return;
     }
     
-    // Safety check for criteria
     if (!loremaster.criteria || !loremaster.criteria.child_criteria) {
         if (loremaster.is_completed) {
             overallStatus.textContent = "Status: Completed!";
@@ -233,6 +232,13 @@ function renderExpansions(expansionCriteria, allAchievements) {
     expansionList.innerHTML = '';
     
     expansionCriteria.forEach(expCrit => {
+        // --- FIX: SAFETY CHECK FOR CRASH ---
+        if (!expCrit.achievement) {
+            // Some criteria are just "requirements" without a linked Achievement ID
+            // We skip them to prevent the crash
+            return; 
+        }
+
         const expId = expCrit.achievement.id; 
         const expData = allAchievements.find(a => a.id === expId);
         
@@ -241,7 +247,6 @@ function renderExpansions(expansionCriteria, allAchievements) {
         expLi.style.flexDirection = 'column';
         expLi.style.alignItems = 'flex-start';
 
-        // NOTE: We display ID because names require a separate Static Data call.
         expLi.innerHTML = `<strong>Achievement ${expId}</strong>: ${expCrit.is_completed ? 'Done' : 'In Progress'}`;
 
         if (!expCrit.is_completed && expData && expData.criteria) {
@@ -249,7 +254,6 @@ function renderExpansions(expansionCriteria, allAchievements) {
             zoneList.style.fontSize = '0.9em';
             zoneList.style.marginTop = '5px';
             
-            // Handle different criteria structures
             let zoneCriteria = [];
             if (expData.criteria.child_criteria) {
                 zoneCriteria = expData.criteria.child_criteria;
@@ -260,10 +264,8 @@ function renderExpansions(expansionCriteria, allAchievements) {
             zoneCriteria.forEach(zoneCrit => {
                 if (zoneCrit.is_completed) return;
                 
-                // Try to find a meaningful name or ID
                 const zoneId = zoneCrit.achievement ? zoneCrit.achievement.id : null;
                 const description = zoneCrit.description || "Unknown Task";
-
                 let detailText = "Incomplete";
 
                 if (zoneId) {
